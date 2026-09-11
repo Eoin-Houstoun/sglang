@@ -11,15 +11,21 @@ and a correctness gate in the loop.
 
 ## Run
 
-From the repository root, in an environment built per `docs/hardware-platforms/cpu_server.mdx`
-(the CPU `sgl-kernel` must be installed; the indexer's import chain needs it):
+From the repository root. The first call builds a CPU environment at
+`$HOME/.artemis/sglang-cpu-venv` (override with `SGLANG_CPU_VENV`): SGLang's CPU dependencies
+from `pyproject_cpu.toml` and the CPU `sgl-kernel`, per `docs/hardware-platforms/cpu_server.mdx`,
+about ten minutes on a 32-core Xeon. SGLang itself is not installed into it; the checkout
+containing the script is what runs.
 
 ```bash
-export SGLANG_USE_CPU_ENGINE=1 PYTHONPATH=$PWD/python
-python -c "import sglang.srt.layers.attention.dsa.dsa_cpu"          # import check
-pytest -q benchmark/kernels/attention/dsa_cpu/test_dsa_cpu.py       # dense goldens pass; sparse tests skip until implemented
-python benchmark/kernels/attention/dsa_cpu/bench_dsa_cpu.py         # writes artemis_results.json to the working directory
+sh benchmark/kernels/attention/dsa_cpu/run.sh compile   # import check
+sh benchmark/kernels/attention/dsa_cpu/run.sh test      # dense goldens pass; sparse tests skip until implemented
+sh benchmark/kernels/attention/dsa_cpu/run.sh bench     # writes artemis_results.json to the repository root
 ```
+
+These three lines are the compile, test and benchmark commands for an Artemis project on
+this branch; the runner needs gcc-13 or a recent gcc, cmake, ninja, libnuma-dev and libtbb-dev
+for the one-time kernel build.
 
 ## Metrics (`artemis_results.json`)
 
