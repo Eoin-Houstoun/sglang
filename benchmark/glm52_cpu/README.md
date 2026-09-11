@@ -41,6 +41,13 @@ questions. A version below it fails.
 | `e2e_s_1k_in`, `e2e_s_8k_in` | lower | median request latency for the configured output length, the target workload |
 | `output_tps_1k_in`, `output_tps_8k_in` | higher | output tokens per second across the concurrent prompts |
 
+## Memory
+
+The CPU engine reserves most of the free memory for the KV cache. Bound it with
+`--max-total-tokens` in `SGLANG_E2E_SERVER_ARGS` when sharing a machine, and start the Artemis
+runner with `--ram-limit-mb` above weights plus cache: the runner's memory monitor kills the
+benchmark otherwise ("Memory limit exceeded").
+
 ## Cost per Discovery version
 
 One server launch per version: weight load plus warm-up, then about a thousand generated
