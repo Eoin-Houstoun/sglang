@@ -86,7 +86,60 @@ def indexer_topk_cpu(
     index_k_cache: torch.Tensor,
 ) -> torch.Tensor:
     """Top-k key positions per query token: [T, index_topk] int32, -1 padded. See the module docstring."""
-    raise NotImplementedError("DSA indexer has no CPU path")
+    T = x.shape[0]
+    topk = indexer.index_topk
+    out = torch.full((T, topk), -1, dtype=torch.int32, device=x.device)
+
+    # A causal row with at most topk valid positions has a predetermined
+    # answer. Besides being exact, handling these rows here avoids both the
+    # indexer GEMMs and topk for short prompts and the early prefill prefix.
+    valid_counts = (positions + 1).clamp(min=0)
+    deterministic = valid_counts <= topk
+    for t in deterministic.nonzero(as_tuple=False).flatten().tolist():
+        n = min(int(valid_counts[t]), topk)
+        if n:
+            out[t, :n] = torch.arange(n, dtype=torch.int32, device=x.device)
+
+    work = (~deterministic).nonzero(as_tuple=False).flatten()
+    if work.numel() == 0:
+        return out
+
+    q = index_q_cpu(indexer, q_lora, positions)
+    new_k = index_k_cpu(indexer, x, positions)
+    keys = torch.cat((index_k_cache, new_k), dim=0)
+    gates = index_head_gates_cpu(indexer, x)
+
+    # With one decode query, materialising all bf16 head logits is small and
+    # one matmul is substantially cheaper than 32 tiny GEMM dispatches.
+    if T == 1:
+        dots = torch.mm(q[0], keys.T)
+        dots.relu_()
+        logits = (dots.float() * gates[0, :, None]).sum(dim=0)
+        selected = torch.topk(logits[: int(valid_counts[0])], topk, sorted=False).indices
+        out[0] = selected.sort().values.to(torch.int32)
+        return out
+
+    # One fp32 [query chunk, KV] accumulator avoids materialising the much
+    # larger [query, index head, KV] logits tensor.
+    chunk = 256
+    for i0 in range(0, work.numel(), chunk):
+        rows = work[i0 : i0 + chunk]
+        max_valid = min(int(valid_counts[rows].max()), keys.shape[0])
+        logits = torch.zeros((rows.numel(), max_valid), dtype=torch.float32, device=x.device)
+        qr = q[rows]
+        for h in range(indexer.n_heads):
+            dots = qr[:, h] @ keys[:max_valid].T
+            logits.add_(torch.relu(dots).float() * gates[rows, h, None])
+        cols = torch.arange(max_valid, device=x.device)
+        logits.masked_fill_(cols[None, :] >= valid_counts[rows, None], float("-inf"))
+        selected = torch.topk(logits, topk, dim=-1, sorted=False).indices
+        selected = selected.sort(dim=-1).values.to(torch.int32)
+        out[rows] = selected
+    return out
+
+
+_DETERMINISTIC_BLOCK = 1024
+_SPARSE_QUERY_CHUNK = 16
 
 
 def sparse_mla_attention_cpu(
@@ -100,4 +153,69 @@ def sparse_mla_attention_cpu(
     softmax_scale: float,
 ) -> torch.Tensor:
     """Absorbed MLA attention where query t attends only to c_kv[topk_indices[t]]. [T, H, Dv]."""
-    raise NotImplementedError("DSA sparse attention has no CPU path")
+    T = q_nope.shape[0]
+    H = w_vc.shape[0]
+    scale = softmax_scale
+    out = torch.empty((T, H, w_vc.shape[-1]), dtype=q_nope.dtype, device=q_nope.device)
+
+    # Decode uses one fully-populated selection row. Keep heads as matrix rows
+    # and issue direct matrix products rather than entering the general gather
+    # chunk and dispatching four einsums.
+    if T == 1 and bool((topk_indices[0] >= 0).all()):
+        idx = topk_indices[0].long()
+        c_sel = c_kv.index_select(0, idx)
+        pe_sel = k_pe.index_select(0, idx)
+        q_abs = torch.bmm(q_nope[0].unsqueeze(1), w_kc).squeeze(1)
+        scores = torch.mm(q_abs, c_sel.T)
+        scores.add_(torch.mm(q_pe[0], pe_sel.T))
+        p = torch.softmax(scores.float().mul_(scale), dim=-1).to(c_kv.dtype)
+        o_lat = torch.mm(p, c_sel)
+        out[0] = torch.bmm(o_lat.unsqueeze(1), w_vc).squeeze(1)
+        return out
+
+    q_abs = torch.einsum("thd,hdr->thr", q_nope, w_kc)
+
+    # Leading causal rows select their complete prefix. Compute these in large
+    # rectangular blocks so every KV row is shared by many queries instead of
+    # being copied by a per-row gather.
+    dense_end = 0
+    max_dense = min(T, topk_indices.shape[1])
+    while dense_end < max_dense:
+        row = topk_indices[dense_end]
+        n = int((row >= 0).sum())
+        if n != dense_end + 1 or not torch.equal(row[:n], torch.arange(n, dtype=row.dtype, device=row.device)):
+            break
+        dense_end += 1
+
+    block = _DETERMINISTIC_BLOCK
+    for t0 in range(0, dense_end, block):
+        t1 = min(dense_end, t0 + block)
+        S = t1
+        scores = torch.einsum("thr,sr->ths", q_abs[t0:t1], c_kv[:S])
+        scores.add_(torch.einsum("thd,sd->ths", q_pe[t0:t1], k_pe[:S]))
+        scores = scores.float().mul_(scale)
+        limit = torch.arange(t0, t1, device=q_nope.device)[:, None, None]
+        cols = torch.arange(S, device=q_nope.device)
+        scores.masked_fill_(cols[None, None, :] > limit, float("-inf"))
+        p = torch.softmax(scores, dim=-1).to(c_kv.dtype)
+        o_lat = torch.einsum("ths,sr->thr", p, c_kv[:S])
+        out[t0:t1] = torch.einsum("thr,hrv->thv", o_lat, w_vc)
+
+    # A small row chunk bounds the irregular gathered working set while all
+    # heads remain vectorised so the contractions still reach bf16 AMX kernels.
+    chunk = _SPARSE_QUERY_CHUNK
+    for t0 in range(dense_end, T, chunk):
+        t1 = min(T, t0 + chunk)
+        idx = topk_indices[t0:t1].long()
+        valid = idx >= 0
+        safe = idx.clamp_min(0)
+        c_sel = c_kv[safe]
+        pe_sel = k_pe[safe]
+        scores = torch.einsum("thr,tkr->thk", q_abs[t0:t1], c_sel)
+        scores.add_(torch.einsum("thd,tkd->thk", q_pe[t0:t1], pe_sel))
+        scores = scores.float().mul_(scale)
+        scores.masked_fill_(~valid[:, None, :], float("-inf"))
+        p = torch.softmax(scores, dim=-1).to(c_kv.dtype)
+        o_lat = torch.einsum("thk,tkr->thr", p, c_sel)
+        out[t0:t1] = torch.einsum("thr,hrv->thv", o_lat, w_vc)
+    return out
