@@ -27,7 +27,7 @@ SGLang is not installed into the environment.
 
 ```bash
 ssh <the runner host>
-git clone -b artemis-dsa-cpu-benchmark <this fork> sglang && cd sglang
+git clone -b artemis-dsa-cpu-benchmark https://github.com/Eoin-Houstoun/sglang.git && cd sglang
 sh benchmark/kernels/attention/dsa_cpu/setup_env.sh
 ```
 
