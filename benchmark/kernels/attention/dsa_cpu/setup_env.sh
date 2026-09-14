@@ -4,7 +4,7 @@
 # docs/hardware-platforms/cpu_server.mdx. Needs uv (installed if missing),
 # gcc-13 or a recent gcc, cmake, ninja, libnuma-dev and libtbb-dev.
 #
-#   sh benchmark/kernels/attention/dsa_cpu/setup_env.sh [venv path]
+#   sh benchmark/kernels/attention/dsa_cpu/setup_env.sh [venv-path] [--force]
 #
 # Run this once per machine before the benchmark's three commands. It takes
 # about ten minutes on a 32-core Xeon and is the only step that needs the
@@ -12,13 +12,32 @@
 set -e
 HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "$HERE/../../../.." && pwd)
-VENV=${1:-${SGLANG_CPU_VENV:-$HOME/.artemis/sglang-cpu-venv}}
+VENV=${SGLANG_CPU_VENV:-$HOME/.artemis/sglang-cpu-venv}
+FORCE=0
+case "$#" in
+  0) ;;
+  1)
+    if [ "$1" = "--force" ]; then FORCE=1; else VENV=$1; fi
+    ;;
+  2)
+    if [ "$1" = "--force" ] || [ "$2" != "--force" ]; then
+      echo "usage: $0 [venv-path] [--force]" >&2
+      exit 2
+    fi
+    VENV=$1
+    FORCE=1
+    ;;
+  *)
+    echo "usage: $0 [venv-path] [--force]" >&2
+    exit 2
+    ;;
+esac
 export PATH="$HOME/.local/bin:$PATH"
 
 # Already built: re-running this is a no-op, so it is safe to put in front of
 # anything. Delete the directory (or pass --force) to rebuild after changing
 # pyproject_cpu.toml or the CPU kernel.
-if [ "${2:-}" != "--force" ] && [ -x "$VENV/bin/python" ] &&
+if [ "$FORCE" -eq 0 ] && [ -x "$VENV/bin/python" ] &&
    "$VENV/bin/python" -c "import torch, sgl_kernel" >/dev/null 2>&1; then
   echo "[dsa_cpu] environment already built at $VENV" >&2
   exit 0
