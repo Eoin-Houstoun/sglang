@@ -24,6 +24,11 @@ the code under test is what runs.
 sh benchmark/kernels/attention/dsa_cpu/setup_env.sh
 ```
 
+Running it again is a no-op once the environment is there. This is a one-time step on the
+machine, like installing the toolchain or registering a runner: it is not one of the three
+Artemis commands below. If those commands report `No such file or directory` for the
+interpreter, this step has not been run.
+
 ## Run
 
 From the repository root, with `$VENV` as the environment above:

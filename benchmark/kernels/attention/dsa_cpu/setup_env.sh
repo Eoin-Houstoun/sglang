@@ -15,6 +15,15 @@ ROOT=$(cd "$HERE/../../../.." && pwd)
 VENV=${1:-${SGLANG_CPU_VENV:-$HOME/.artemis/sglang-cpu-venv}}
 export PATH="$HOME/.local/bin:$PATH"
 
+# Already built: re-running this is a no-op, so it is safe to put in front of
+# anything. Delete the directory (or pass --force) to rebuild after changing
+# pyproject_cpu.toml or the CPU kernel.
+if [ "$2" != "--force" ] && [ -x "$VENV/bin/python" ] &&
+   "$VENV/bin/python" -c "import torch, sgl_kernel" >/dev/null 2>&1; then
+  echo "[dsa_cpu] environment already built at $VENV" >&2
+  exit 0
+fi
+
 # Preflight. Everything below this point assumes a toolchain and an index to
 # install from; say which piece is missing rather than failing inside cmake.
 MISSING=""
