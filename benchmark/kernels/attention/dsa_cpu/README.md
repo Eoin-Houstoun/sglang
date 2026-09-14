@@ -20,7 +20,14 @@ libnuma-dev, libtbb-dev) or the network. It checks for those first and names any
 SGLang itself is not installed into the environment: `PYTHONPATH` points at the checkout, so
 the code under test is what runs.
 
+Run it on the machine the Artemis runner runs on, **as the user the runner runs as**: the
+environment lands in that user's `$HOME`, and the runner's commands look for it there. Any
+checkout of this branch will do, and it need not be the one the runner later clones, since
+SGLang is not installed into the environment.
+
 ```bash
+ssh <the runner host>
+git clone -b artemis-dsa-cpu-benchmark <this fork> sglang && cd sglang
 sh benchmark/kernels/attention/dsa_cpu/setup_env.sh
 ```
 
