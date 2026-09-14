@@ -12,8 +12,8 @@ This harness defines the production-shaped CPU boundary missing from SGLang:
 - independent FP32 correctness oracles;
 - pure-PyTorch DSA and SGLang dense CPU MLA performance baselines.
 
-The C++ operations are intentionally stubs in the seed. A functional Discovery
-must implement them without changing their schemas, tests, or benchmark.
+The seed includes the fastest correct implementation from the functional
+Discovery. Optimization must preserve its schemas, tests, and benchmark.
 
 ## One-time runner setup
 
@@ -37,9 +37,11 @@ benchmark/kernels/attention/dsa_cpu/artemis_test.sh
 benchmark/kernels/attention/dsa_cpu/artemis_benchmark.sh
 ```
 
-The benchmark writes numeric metrics to `artemis_results.json`. Missing C++ ops
-receive a large latency sentinel and `cpp_dsa_correct=0`; implemented candidates
-must set that gate to `1` before their latency is meaningful.
+The benchmark writes raw C++ DSA, PyTorch DSA, and dense C++ MLA timings to
+`artemis_results.json`. It also reports `cpp_over_torch_*` and
+`cpp_over_dense_*` ratios, where values below `1.0` mean the C++ DSA candidate
+is faster than that reference. Missing or incorrect C++ operations fail the
+benchmark instead of producing latency sentinels.
 
 The C4 runner uses an Emerald Rapids Xeon Platinum 8581C. Results from this
 harness are evidence for that CPU and should not be described as Xeon 6 results.

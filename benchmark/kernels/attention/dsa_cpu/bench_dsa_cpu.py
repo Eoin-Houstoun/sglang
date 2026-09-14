@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import gc
 import json
+import math
 import os
 import statistics
 import sys
@@ -44,7 +45,6 @@ from sglang.srt.layers.attention.dsa.dsa_cpu import (  # noqa: E402
 
 WARMUP = int(os.environ.get("DSA_BENCH_WARMUP", "1"))
 ITERS = int(os.environ.get("DSA_BENCH_ITERS", "3"))
-SENTINEL_MS = 1_000_000_000.0
 
 
 def log(message: str):
@@ -255,7 +255,7 @@ def cpp_correctness() -> int:
     )
 
 
-def benchmark_point(name: str, indexer, cpp_available: bool):
+def benchmark_point(name: str, indexer):
     batches = make_batches(name, GLM52, indexer, seed=29)
     is_decode = name.startswith("decode")
 
@@ -266,10 +266,8 @@ def benchmark_point(name: str, indexer, cpp_available: bool):
         dense_ms = timed(lambda: production_dense_decode(batches))
     else:
         dense_ms = timed(lambda: production_dense_extend(batches[0]))
-    cpp_ms = (
-        timed(lambda: [cpp_dsa_layer(indexer, batch) for batch in batches])
-        if cpp_available
-        else SENTINEL_MS
+    cpp_ms = timed(
+        lambda: [cpp_dsa_layer(indexer, batch) for batch in batches]
     )
     log(
         f"{name}: cpp={cpp_ms:.3f}ms torch={torch_ms:.3f}ms "
@@ -287,6 +285,8 @@ def main():
     weights = make_weights(GLM52)
     indexer = build_indexer(GLM52, weights)
     cpp_available = bool(cpp_correctness())
+    if not cpp_available:
+        raise RuntimeError("C++ DSA correctness gate failed")
     results: dict[str, float | int] = {"cpp_dsa_correct": int(cpp_available)}
 
     for point in (
@@ -298,12 +298,16 @@ def main():
         "decode_8k_b4",
         "decode_8k_b16",
     ):
-        cpp_ms, torch_ms, dense_ms = benchmark_point(
-            point, indexer, cpp_available
-        )
+        cpp_ms, torch_ms, dense_ms = benchmark_point(point, indexer)
+        if not math.isfinite(torch_ms) or torch_ms <= 0.0:
+            raise RuntimeError(f"invalid PyTorch DSA timing for {point}: {torch_ms}")
+        if not math.isfinite(dense_ms) or dense_ms <= 0.0:
+            raise RuntimeError(f"invalid dense C++ MLA timing for {point}: {dense_ms}")
         results[f"cpp_{point}_ms"] = cpp_ms
         results[f"torch_{point}_ms"] = torch_ms
         results[f"dense_{point}_ms"] = dense_ms
+        results[f"cpp_over_torch_{point}"] = cpp_ms / torch_ms
+        results[f"cpp_over_dense_{point}"] = cpp_ms / dense_ms
 
     temporary = output_path.with_suffix(".json.tmp")
     temporary.write_text(json.dumps(results, indent=2) + "\n")
