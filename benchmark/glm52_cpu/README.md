@@ -13,8 +13,13 @@ sh benchmark/glm52_cpu/run_e2e.sh test      # the layer-level DSA gate (seconds)
 sh benchmark/glm52_cpu/run_e2e.sh bench     # launch, GSM8K gate, serving benchmark, artemis_results.json
 ```
 
-These are the three Artemis project commands. The CPU environment is built on first use by
-`benchmark/kernels/attention/dsa_cpu/setup_env.sh` (see that README).
+These are the three Artemis project commands. Build the CPU environment first with
+`sh benchmark/kernels/attention/dsa_cpu/setup_env.sh` (see that README); these commands stop
+with a message if it is not there.
+
+Unlike the layer benchmark, this one keeps a wrapper: it layers the committed defaults in
+`config.env` under the machine-local `$HOME/.artemis/glm52_cpu.env` under the environment,
+and preloads the allocator libraries SGLang's CPU docs use for serving.
 
 ## Configuration
 

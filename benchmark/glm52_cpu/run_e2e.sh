@@ -6,8 +6,9 @@
 # Settings come from config.env next to this script (committed, GLM-5.2 on
 # six sub-NUMA nodes by default), then $HOME/.artemis/glm52_cpu.env if it
 # exists (machine-local: model path, TP, core binding), then the environment.
-# The CPU environment is built on first use by the layer benchmark's
-# setup_env.sh; SGLANG_CPU_VENV overrides its location.
+# The CPU environment is built once by the layer benchmark's setup_env.sh,
+# which must be run before these commands; SGLANG_CPU_VENV overrides where it
+# lives.
 set -e
 HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "$HERE/../.." && pwd)
@@ -15,7 +16,8 @@ LAYER="$ROOT/benchmark/kernels/attention/dsa_cpu"
 VENV=${SGLANG_CPU_VENV:-$HOME/.artemis/sglang-cpu-venv}
 PY=$VENV/bin/python
 if [ ! -x "$PY" ] || ! "$PY" -c "import torch, sgl_kernel" >/dev/null 2>&1; then
-  sh "$LAYER/setup_env.sh" "$VENV"
+  echo "no CPU environment at $VENV; run: sh $LAYER/setup_env.sh" >&2
+  exit 1
 fi
 # Configuration precedence: environment > machine-local file > committed defaults.
 _ENV_SNAPSHOT=$(export -p)
@@ -36,7 +38,8 @@ done
 cd "$ROOT"
 case "$1" in
   compile) exec "$PY" -c "import sglang.srt.layers.attention.dsa.dsa_cpu, sglang.launch_server" ;;
-  test) exec sh "$LAYER/run.sh" test ;;
+  test) export OMP_NUM_THREADS=${OMP_NUM_THREADS:-16}
+        exec "$PY" -m pytest -q -p no:cacheprovider "$LAYER/test_dsa_cpu.py" ;;
   bench) exec "$PY" benchmark/glm52_cpu/bench_e2e.py ;;
   *) echo "usage: run_e2e.sh compile|test|bench" >&2; exit 2 ;;
 esac

@@ -9,23 +9,47 @@ MLA dims, bf16; only the hidden width and `q_lora_rank` are reduced) with SGLang
 `Indexer` module, so the missing functions can be implemented and made fast with a benchmark
 and a correctness gate in the loop.
 
-## Run
+## Setup, once per machine
 
-From the repository root. The first call builds a CPU environment at
-`$HOME/.artemis/sglang-cpu-venv` (override with `SGLANG_CPU_VENV`): SGLang's CPU dependencies
-from `pyproject_cpu.toml` and the CPU `sgl-kernel`, per `docs/hardware-platforms/cpu_server.mdx`,
-about ten minutes on a 32-core Xeon. SGLang itself is not installed into it; the checkout
-containing the script is what runs.
+Builds a CPU environment at `$HOME/.artemis/sglang-cpu-venv` (override with
+`SGLANG_CPU_VENV`): SGLang's CPU dependencies from `pyproject_cpu.toml` and the CPU
+`sgl-kernel`, per `docs/hardware-platforms/cpu_server.mdx`. About ten minutes on a 32-core
+Xeon, and the only step that needs the build toolchain (gcc-13 or a recent gcc, cmake, ninja,
+libnuma-dev, libtbb-dev) or the network. It checks for those first and names anything missing.
+
+SGLang itself is not installed into the environment: `PYTHONPATH` points at the checkout, so
+the code under test is what runs.
 
 ```bash
-sh benchmark/kernels/attention/dsa_cpu/run.sh compile   # import check
-sh benchmark/kernels/attention/dsa_cpu/run.sh test      # dense goldens pass; sparse tests skip until implemented
-sh benchmark/kernels/attention/dsa_cpu/run.sh bench     # writes artemis_results.json to the repository root
+sh benchmark/kernels/attention/dsa_cpu/setup_env.sh
 ```
 
-These three lines are the compile, test and benchmark commands for an Artemis project on
-this branch; the runner needs gcc-13 or a recent gcc, cmake, ninja, libnuma-dev and libtbb-dev
-for the one-time kernel build.
+## Run
+
+From the repository root, with `$VENV` as the environment above:
+
+```bash
+VENV=$HOME/.artemis/sglang-cpu-venv
+
+# compile: the layer imports
+SGLANG_USE_CPU_ENGINE=1 PYTHONPATH=$PWD/python \
+  $VENV/bin/python -c "import sglang.srt.layers.attention.dsa.dsa_cpu"
+
+# test: dense goldens pass, sparse tests skip until implemented
+SGLANG_USE_CPU_ENGINE=1 PYTHONPATH=$PWD/python OMP_NUM_THREADS=16 \
+  $VENV/bin/python -m pytest -q -p no:cacheprovider \
+  benchmark/kernels/attention/dsa_cpu/test_dsa_cpu.py
+
+# benchmark: writes artemis_results.json to the repository root
+SGLANG_USE_CPU_ENGINE=1 PYTHONPATH=$PWD/python OMP_NUM_THREADS=16 \
+  $VENV/bin/python benchmark/kernels/attention/dsa_cpu/bench_dsa_cpu.py
+```
+
+Those three are the compile, test and benchmark commands for an Artemis project on this
+branch, with `$VENV` and `$PWD` written out in full. `SGLANG_USE_CPU_ENGINE=1` is required:
+without it the CPU dispatch key is empty and nothing reaches `forward_cpu`. Set
+`OMP_NUM_THREADS` to the cores you want the benchmark to use; it changes the timings, so keep
+it the same across versions being compared.
 
 ## Metrics (`artemis_results.json`)
 
