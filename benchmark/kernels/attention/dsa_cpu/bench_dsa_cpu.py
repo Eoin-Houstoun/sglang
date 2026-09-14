@@ -95,21 +95,24 @@ def production_dense_extend(batch):
     """Call SGLang's registered dense C++ absorbed-MLA prefill kernel."""
     query = torch.cat((batch.q_abs, batch.q_pe), dim=-1).contiguous()
     kv = torch.cat((batch.c_kv, batch.k_pe), dim=-1).unsqueeze(1).contiguous()
+    v_buffer = kv[..., : GLM52.kv_lora_rank]
+    query_tokens = batch.q_abs.shape[0]
+    k_extend = kv[-query_tokens:].contiguous()
+    v_extend = batch.c_kv[-query_tokens:].unsqueeze(1).contiguous()
     output = torch.empty_like(batch.q_abs)
     kv_tokens = batch.c_kv.shape[0]
-    query_tokens = batch.q_abs.shape[0]
     req_to_token = torch.arange(kv_tokens, dtype=torch.int32).unsqueeze(0)
     torch.ops.sgl_kernel.extend_attention_cpu(
         query,
-        None,
-        None,
+        k_extend,
+        v_extend,
         output,
         kv,
-        kv,
+        v_buffer,
         1.0,
         1.0,
         req_to_token,
-        torch.zeros(1, dtype=torch.int32),
+        torch.zeros(1, dtype=torch.int64),
         torch.tensor([kv_tokens], dtype=torch.int64),
         torch.tensor([query_tokens], dtype=torch.int32),
         torch.zeros(1, dtype=torch.int32),
@@ -137,6 +140,9 @@ def production_dense_decode(batches):
         torch.cat((batch.c_kv, batch.k_pe), dim=-1) for batch in batches
     ]
     kv = torch.cat(kv_parts, dim=0).unsqueeze(1).contiguous()
+    v_buffer = kv[..., : GLM52.kv_lora_rank]
+    new_key = torch.stack([part[-1] for part in kv_parts]).unsqueeze(1)
+    new_value = torch.stack([batch.c_kv[-1] for batch in batches]).unsqueeze(1)
     output = torch.empty_like(q_abs)
     req_to_token = torch.arange(
         batch_size * kv_tokens, dtype=torch.int32
@@ -144,13 +150,13 @@ def production_dense_decode(batches):
     torch.ops.sgl_kernel.decode_attention_cpu(
         query,
         kv,
-        kv,
+        v_buffer,
         1.0,
         1.0,
         output,
-        None,
-        None,
-        torch.zeros(batch_size, dtype=torch.int64),
+        new_key,
+        new_value,
+        torch.arange(batch_size, dtype=torch.int64) * kv_tokens + kv_tokens - 1,
         torch.empty(
             batch_size,
             GLM52.num_attention_heads,
@@ -159,7 +165,7 @@ def production_dense_decode(batches):
             dtype=torch.float32,
         ),
         req_to_token,
-        torch.arange(batch_size, dtype=torch.int32),
+        torch.arange(batch_size, dtype=torch.int64),
         torch.full((batch_size,), kv_tokens, dtype=torch.int64),
         GLM52.softmax_scale,
         0.0,

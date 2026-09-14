@@ -137,7 +137,13 @@ else()
     )
 endif()
 
-Python_add_library(common_ops MODULE USE_SABI ${SKBUILD_SABI_VERSION} WITH_SOABI ${SOURCES})
+if(SKBUILD_SABI_VERSION)
+    Python_add_library(common_ops MODULE USE_SABI ${SKBUILD_SABI_VERSION} WITH_SOABI ${SOURCES})
+else()
+    # Direct incremental builds (including Artemis persistent workspaces) do
+    # not run through scikit-build and therefore have no stable-ABI value.
+    Python_add_library(common_ops MODULE WITH_SOABI ${SOURCES})
+endif()
 target_link_libraries(common_ops PRIVATE ${TORCH_LIBRARIES} ${NUMA_LIB})
 target_include_directories(common_ops PRIVATE ${TORCH_INCLUDE_DIRS})
 
