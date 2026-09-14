@@ -252,6 +252,21 @@ void extend_attention_cpu(
     std::optional<at::Tensor> tree_mask,
     bool is_causal = true);
 
+at::Tensor dsa_indexer_topk_cpu(
+    const at::Tensor& q,
+    const at::Tensor& keys,
+    const at::Tensor& gates,
+    const at::Tensor& positions,
+    int64_t topk);
+
+at::Tensor sparse_mla_attention_cpu(
+    const at::Tensor& q_abs,
+    const at::Tensor& q_pe,
+    const at::Tensor& c_kv,
+    const at::Tensor& k_pe,
+    const at::Tensor& topk_indices,
+    double softmax_scale);
+
 // flash attention
 at::Tensor flash_attn_varlen_func(
     const at::Tensor& q,
@@ -729,6 +744,15 @@ TORCH_LIBRARY_FRAGMENT(sgl_kernel, m) {
       "sliding_window_size, Tensor? "
       "encoder_lens, Tensor? sinks, Tensor? tree_mask=None, bool is_causal=True) -> ()");
   m.impl("extend_attention_cpu", torch::kCPU, &extend_attention_cpu);
+
+  // DeepSeek Sparse Attention
+  m.def(
+      "dsa_indexer_topk_cpu(Tensor q, Tensor keys, Tensor gates, Tensor positions, int topk) -> Tensor");
+  m.impl("dsa_indexer_topk_cpu", torch::kCPU, &dsa_indexer_topk_cpu);
+  m.def(
+      "sparse_mla_attention_cpu(Tensor q_abs, Tensor q_pe, Tensor c_kv, Tensor k_pe, Tensor topk_indices, float "
+      "softmax_scale) -> Tensor");
+  m.impl("sparse_mla_attention_cpu", torch::kCPU, &sparse_mla_attention_cpu);
 
   // flash attn
   m.def(

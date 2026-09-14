@@ -1453,6 +1453,22 @@ class Indexer(DSANPUIndexerMixin, BaseFusedOp):
         # platforms with a dedicated forward below.
         raise NotImplementedError("Indexer has no native (pure-torch) path")
 
+    def forward_cpu(
+        self,
+        x: torch.Tensor,
+        q_lora: torch.Tensor,
+        positions: torch.Tensor,
+        forward_batch,
+        layer_id: int,
+        return_indices: bool = True,
+    ) -> Optional[torch.Tensor]:
+        from sglang.srt.layers.attention.dsa.dsa_cpu import indexer_topk_cpu
+
+        topk = indexer_topk_cpu(
+            self, x, q_lora, positions, forward_batch.index_k_cache
+        )
+        return topk if return_indices else None
+
     def forward_xpu(
         self,
         x: torch.Tensor,
