@@ -7,7 +7,7 @@ operations, passes an independent FP32 correctness gate, and reports real
 latencies.
 
 Repository:
-`https://github.com/turintech/sglang/tree/cpu-dsa-glm52-ratio-discovery`
+`https://github.com/Eoin-Houstoun/sglang/tree/cpu-dsa-glm52-ratio-discovery`
 
 ## Scope
 
@@ -42,7 +42,7 @@ Clone the example branch:
 
 ```bash
 git clone --branch cpu-dsa-glm52-ratio-discovery \
-  https://github.com/turintech/sglang.git
+  https://github.com/Eoin-Houstoun/sglang.git
 cd sglang
 ```
 
@@ -120,11 +120,11 @@ The reference host is Emerald Rapids, not Xeon 6.
 ## Run with Artemis Discovery
 
 Register an Artemis runner on the target machine and add a Git credential that
-can read `turintech/sglang`. Then import this branch:
+can read `Eoin-Houstoun/sglang`. Then import this branch:
 
 ```bash
 artemis project import \
-  --git-url https://github.com/turintech/sglang.git \
+  --git-url https://github.com/Eoin-Houstoun/sglang.git \
   --key-id <git-key-id> \
   --name sglang-glm52-cpu-dsa-example \
   --branch cpu-dsa-glm52-ratio-discovery
