@@ -59,6 +59,13 @@ def test_in_kernel_gate_and_beta_activation(lower_bound):
     )
 
 
+@pytest.mark.parametrize("dtype", [torch.bfloat16, torch.float16])
+@torch.inference_mode()
+def test_kimi_linear_call(dtype):
+    """The path Kimi Linear prefill takes: raw gate and beta at the model's shape."""
+    run_and_check(make_inputs([70, 1, 57], raw_gate=True, dtype=dtype, seed=5))
+
+
 @torch.inference_mode()
 def test_sglang_cpu_extend_dispatches_here():
     from sglang.srt.layers.attention.linear.kernels import kda_triton

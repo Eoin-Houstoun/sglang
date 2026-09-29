@@ -31,8 +31,11 @@ dependencies, the CPU `sgl_kernel`, CMake >= 3.26 and pytest. About ten minutes;
 - **Test** compares output and the updated state pool with a float64 reference, checks
   untouched pool rows, covers tails, odd dims, ragged batches, bf16/fp16 and the in-kernel
   gate activations. A skipped test fails the command.
-- **Benchmark** times the entry point, the frozen PyTorch fallback and `torch.compile` of it,
-  refuses to report if the entry point disagrees with the fallback, and writes
-  `artemis_results.json`. The metric to optimise is `kda_prefill_2k_ms` (lower is better).
+- **Benchmark** calls the entry point the way Kimi Linear prefill does (raw gate and beta,
+  activated in the kernel with `A_log` and `dt_bias`) at 512, 2k, 8k and a ragged 4x512 batch.
+  It times the entry point, the frozen PyTorch fallback and `torch.compile` of it, refuses to
+  report if the entry point disagrees with the fallback, and writes `artemis_results.json`.
+  The headline metric is `kda_prefill_2k_ms` (lower is better); edit `POINTS` in
+  `bench_kda_cpu.py` for other shapes, e.g. fewer heads per rank under tensor parallelism.
 
 `OMP_NUM_THREADS` defaults to 16. Set it to the cores you want measured.
