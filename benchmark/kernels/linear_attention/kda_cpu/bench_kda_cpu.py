@@ -17,9 +17,9 @@ from pathlib import Path
 import torch
 
 sys.path.insert(0, os.path.dirname(__file__))
+import sgl_kernel  # noqa: E402,F401  registers the torch.ops.sgl_kernel CPU ops
 from reference import make_inputs, pytorch_fallback, pytorch_step  # noqa: E402
 
-import sgl_kernel  # noqa: E402,F401  registers the torch.ops.sgl_kernel CPU ops
 from sglang.kernels.ops.attention.fla.kda_cpu import chunk_kda  # noqa: E402
 
 WARMUP = int(os.environ.get("KDA_BENCH_WARMUP", "1"))
@@ -67,21 +67,30 @@ def benchmark_point(name, lengths, compiled_step):
         (actual_state - expected_state).abs().max().item(),
     )
     if not math.isfinite(error) or error > TOLERANCE:
-        raise RuntimeError(f"{name}: entry point differs from the PyTorch fallback by {error}")
+        raise RuntimeError(
+            f"{name}: entry point differs from the PyTorch fallback by {error}"
+        )
 
     # Each call mutates the pool in place, so every call gets a fresh copy; it is tiny next to KDA.
     implementations = {
         "kda": lambda: chunk_kda(**inputs.kwargs(inputs.state.clone())),
         "pytorch": lambda: pytorch_fallback(inputs, inputs.state.clone()),
-        "compile": lambda: pytorch_fallback(inputs, inputs.state.clone(), compiled_step),
+        "compile": lambda: pytorch_fallback(
+            inputs, inputs.state.clone(), compiled_step
+        ),
     }
     rounds = {key: [] for key in implementations}
     for _ in range(REPEATS):
         for key, function in implementations.items():
             rounds[key].append(timed(function))
-    log(f"{name}: " + ", ".join(
-        f"{key} {statistics.mean(ms):.1f} +/- {_spread(ms):.1f} ms" for key, ms in rounds.items()
-    ) + f", max error {error:.2e}")
+    log(
+        f"{name}: "
+        + ", ".join(
+            f"{key} {statistics.mean(ms):.1f} +/- {_spread(ms):.1f} ms"
+            for key, ms in rounds.items()
+        )
+        + f", max error {error:.2e}"
+    )
     return rounds, error
 
 
@@ -90,13 +99,17 @@ def _spread(samples) -> float:
 
 
 def main():
-    threads = int(os.environ.get("OMP_NUM_THREADS", str(max(1, (os.cpu_count() or 2) // 2))))
+    threads = int(
+        os.environ.get("OMP_NUM_THREADS", str(max(1, (os.cpu_count() or 2) // 2)))
+    )
     torch.set_num_threads(threads)
     output_path = Path.cwd() / "artemis_results.json"
     output_path.unlink(missing_ok=True)
     compiled_step = torch.compile(pytorch_step, dynamic=False)
-    log(f"threads {threads}, torch {torch.__version__}, "
-        f"capability {torch.backends.cpu.get_cpu_capability()}")
+    log(
+        f"threads {threads}, torch {torch.__version__}, "
+        f"capability {torch.backends.cpu.get_cpu_capability()}"
+    )
 
     results = {}
     worst_error = 0.0

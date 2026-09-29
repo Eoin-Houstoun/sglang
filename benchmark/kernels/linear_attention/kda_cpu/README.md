@@ -25,9 +25,10 @@ and `libtbb-dev`, and network access on that first run; the script names anythin
 
 - **Build** rebuilds the CPU `sgl_kernel` incrementally (any new `.cpp` in
   `python/sglang/kernels/aot/csrc/cpu/` is picked up) and checks the entry point imports.
-- **Test** compares output and the updated state pool with a float64 reference, checks
-  untouched pool rows, covers tails, odd dims, ragged batches, bf16/fp16 and the in-kernel
-  gate activations. A skipped test fails the command.
+- **Test** runs `test/registered/cpu/test_kda.py`: output and updated state pool against the torch
+  naive references ported from FLA (`naive_recurrent_kda`, and `naive_chunk_kda` at chunk sizes
+  16/32/64), untouched pool rows, tails, odd dims, ragged batches, bf16/fp16 and the Kimi Linear call,
+  with SGLang's CPU `precision` tolerances. A skipped test fails the command.
 - **Benchmark** calls the entry point the way Kimi Linear prefill does (raw gate and beta,
   activated in the kernel with `A_log` and `dt_bias`) at 512, 2k, 8k and a ragged 4x512 batch.
   It times the entry point, the frozen PyTorch fallback and `torch.compile` of it, refuses to

@@ -1,9 +1,8 @@
-"""Inputs and references for the CPU chunk_kda benchmark.
+"""Inputs and the frozen PyTorch baseline for the CPU chunk_kda benchmark.
 
-`reference_kda` is the correctness gate: a per-token, per-head float64 loop
-of the KDA delta rule, kept deliberately independent of any implementation
-under test. `pytorch_step` is the frozen PyTorch fallback the benchmark times
-against (and compiles with torch.compile); it never changes between versions.
+`pytorch_step` is the fallback the benchmark times against (and compiles with
+torch.compile); it never changes between versions. Correctness lives in
+test/registered/cpu/test_kda.py.
 """
 
 from typing import NamedTuple
@@ -82,9 +81,22 @@ def make_inputs(
     state = randn(pool, heads, value_dim, key_dim) * 0.05
     # Scatter sequences over non-contiguous pool rows so untouched rows exist.
     indices = torch.randperm(pool, generator=generator)[: len(lengths)].to(torch.int32)
-    cu_seqlens = torch.tensor([0, *torch.tensor(lengths).cumsum(0).tolist()], dtype=torch.int32)
+    cu_seqlens = torch.tensor(
+        [0, *torch.tensor(lengths).cumsum(0).tolist()], dtype=torch.int32
+    )
     return KDAInputs(
-        q, k, v, g, beta, state, indices, cu_seqlens, A_log, dt_bias, lower_bound, raw_gate
+        q,
+        k,
+        v,
+        g,
+        beta,
+        state,
+        indices,
+        cu_seqlens,
+        A_log,
+        dt_bias,
+        lower_bound,
+        raw_gate,
     )
 
 
@@ -101,28 +113,6 @@ def activated(inputs: KDAInputs):
     if inputs.beta_is_raw:
         beta = beta.sigmoid()
     return g, beta
-
-
-def reference_kda(inputs: KDAInputs):
-    """Float64 golden output and state pool."""
-    g, beta = activated(inputs)
-    q = F.normalize(inputs.q.double(), dim=-1, eps=1e-6)
-    k = F.normalize(inputs.k.double(), dim=-1, eps=1e-6)
-    v = inputs.v.double()
-    scale = inputs.q.shape[-1] ** -0.5
-    output = torch.zeros(v.shape, dtype=torch.float64)
-    pool = inputs.state.double().clone()
-    offsets = inputs.cu_seqlens.tolist()
-    for sequence, row in enumerate(inputs.indices.tolist()):
-        for head in range(q.shape[2]):
-            state = pool[row, head]
-            for t in range(offsets[sequence], offsets[sequence + 1]):
-                state = state * g[0, t, head].exp()[None, :]
-                residual = v[0, t, head] - state @ k[0, t, head]
-                state = state + beta[0, t, head] * torch.outer(residual, k[0, t, head])
-                output[0, t, head] = (state @ q[0, t, head]) * scale
-            pool[row, head] = state
-    return output, pool
 
 
 def pytorch_step(state, decay, k, v, beta, q, scale: float):

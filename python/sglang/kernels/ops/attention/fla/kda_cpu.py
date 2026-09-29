@@ -38,10 +38,18 @@ def chunk_kda(
     initial_state: fp32 [N, H, V, K]; initial_state_indices: [num_seqs].
     Returns the output [1, T, H, V] in v's dtype.
     """
-    if output_intermediate_states or track_state is not None or track_chunk_idx is not None:
-        raise NotImplementedError("CPU chunk_kda does not support intermediate state snapshots")
+    if (
+        output_intermediate_states
+        or track_state is not None
+        or track_chunk_idx is not None
+    ):
+        raise NotImplementedError(
+            "CPU chunk_kda does not support intermediate state snapshots"
+        )
     if initial_state is None or initial_state_indices is None:
-        raise ValueError("CPU chunk_kda requires initial_state and initial_state_indices")
+        raise ValueError(
+            "CPU chunk_kda requires initial_state and initial_state_indices"
+        )
     if scale is None:
         scale = k.shape[-1] ** -0.5
 
@@ -52,7 +60,11 @@ def chunk_kda(
     if use_qk_l2norm_in_kernel:
         q = F.normalize(q, dim=-1, eps=1e-6)
         k = F.normalize(k, dim=-1, eps=1e-6)
-    gate = _activate_gate(g, A_log, dt_bias, lower_bound)[0] if A_log is not None else g[0].float()
+    gate = (
+        _activate_gate(g, A_log, dt_bias, lower_bound)[0]
+        if A_log is not None
+        else g[0].float()
+    )
     decay = gate.exp()
     beta = beta[0].float().sigmoid() if beta_is_raw else beta[0].float()
     values = v[0].float()
@@ -64,6 +76,8 @@ def chunk_kda(
             state.mul_(decay[t].unsqueeze(-2))
             residual = values[t] - torch.einsum("hvk,hk->hv", state, k[t])
             state.add_(torch.einsum("hv,hk->hvk", residual * beta[t, :, None], k[t]))
-            output[t] = (torch.einsum("hvk,hk->hv", state, q[t]) * scale).to(output.dtype)
+            output[t] = (torch.einsum("hvk,hk->hv", state, q[t]) * scale).to(
+                output.dtype
+            )
         initial_state[state_index] = state
     return output.unsqueeze(0)

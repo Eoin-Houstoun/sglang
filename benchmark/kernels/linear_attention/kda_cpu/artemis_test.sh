@@ -11,7 +11,7 @@ export PYTHONPATH="$ROOT/python"
 export OMP_NUM_THREADS="${OMP_NUM_THREADS:-16}"
 
 "$VENV/bin/python" -m pytest -q -rs -p no:cacheprovider \
-  "$ROOT/benchmark/kernels/linear_attention/kda_cpu/test_kda_cpu.py" | tee "$REPORT"
+  "$ROOT/test/registered/cpu/test_kda.py" | tee "$REPORT"
 # A skipped test is a gate that did not run.
 if grep -q -E '[0-9]+ skipped' "$REPORT"; then
   echo "kda_cpu: tests were skipped, failing" >&2
