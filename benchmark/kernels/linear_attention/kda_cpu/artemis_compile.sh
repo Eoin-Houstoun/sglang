@@ -8,7 +8,9 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
 test -x "$VENV/bin/python"
 mkdir -p "$CACHE/src" "$CACHE/build"
 
-rsync -a --delete "$ROOT/python/sglang/kernels/aot/" "$CACHE/src/"
+# Compare by content, not mtime, and stamp changed files now: ninja rebuilds by mtime, and a
+# runner workspace can carry any timestamps, so this rebuilds exactly the files a version changed.
+rsync -rl --checksum --delete "$ROOT/python/sglang/kernels/aot/" "$CACHE/src/"
 
 export VIRTUAL_ENV="$VENV"
 export PATH="$VENV/bin:$PATH"
