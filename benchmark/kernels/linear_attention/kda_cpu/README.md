@@ -16,7 +16,7 @@ sh benchmark/kernels/linear_attention/kda_cpu/setup_env.sh
 ```
 
 It builds `~/.artemis/sglang-cpu-venv` (set `SGLANG_CPU_VENV` to move it), with SGLang's CPU
-dependencies, the CPU `sgl_kernel` and CMake >= 3.26. About ten minutes; later runs are a no-op.
+dependencies, the CPU `sgl_kernel`, CMake >= 3.26 and pytest. About ten minutes; later runs are a no-op.
 
 ## Commands
 

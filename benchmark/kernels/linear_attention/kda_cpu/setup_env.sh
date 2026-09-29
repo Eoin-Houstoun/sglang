@@ -102,8 +102,9 @@ echo "[kda_cpu] installing SGLang CPU dependencies into $VENV" >&2
 cp -r "$ROOT/python/." "$TMP/pkg"
 cd "$TMP/pkg" && cp pyproject_cpu.toml pyproject.toml
 uv pip install --upgrade pip setuptools
-# The CPU kernel CMakeLists uses USE_SABI, which needs CMake >= 3.26; artemis_compile.sh runs it from here.
-uv pip install "cmake>=3.26" ninja
+# From PyPI, not the torch CPU index (which only has cmake 3.25): the CPU kernel CMakeLists
+# uses USE_SABI, which needs CMake >= 3.26, and artemis_compile.sh runs cmake from this venv.
+env -u UV_CONFIG_FILE uv pip install --no-config "cmake>=3.26" ninja pytest
 uv pip install .
 uv pip uninstall sglang >/dev/null 2>&1 || true
 
