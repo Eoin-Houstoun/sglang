@@ -72,8 +72,9 @@ def make_inputs(
     if raw_gate:
         g = (randn(1, tokens, heads, key_dim) * 0.5 - 1.0).to(dtype)
         beta = randn(1, tokens, heads).to(dtype)
-        A_log = randn(heads) * 0.1
-        dt_bias = randn(heads, key_dim) * 0.1
+        # Shapes and dtypes as KimiDeltaAttention passes them to extend().
+        A_log = (randn(1, 1, heads, 1) * 0.1).float()
+        dt_bias = (randn(heads * key_dim) * 0.1).float()
     else:
         g = (-(randn(1, tokens, heads, key_dim) * 0.05).abs() - 0.02).to(dtype)
         beta = torch.rand(1, tokens, heads, generator=generator).to(dtype)

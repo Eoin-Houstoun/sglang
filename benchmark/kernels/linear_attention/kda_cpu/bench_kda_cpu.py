@@ -26,9 +26,11 @@ WARMUP = int(os.environ.get("KDA_BENCH_WARMUP", "1"))
 ITERS = int(os.environ.get("KDA_BENCH_ITERS", "5"))
 TOLERANCE = 3e-2
 
-# name -> sequence lengths; 32 heads, key/value dim 128, bf16.
+# name -> sequence lengths; 32 heads, key/value dim 128, bf16, called the way Kimi Linear
+# calls extend(): raw gate and beta, activated in the kernel with A_log and dt_bias.
 POINTS = {
     "prefill_2k": [2048],
+    "prefill_8k": [8192],
     "prefill_512": [512],
     "ragged_4x512": [512, 512, 512, 512],
 }
@@ -52,7 +54,7 @@ def timed(function) -> float:
 
 @torch.inference_mode()
 def benchmark_point(name, lengths, compiled_step):
-    inputs = make_inputs(lengths, seed=1)
+    inputs = make_inputs(lengths, raw_gate=True, seed=1)
 
     expected_state = inputs.state.clone()
     expected = pytorch_fallback(inputs, expected_state)
