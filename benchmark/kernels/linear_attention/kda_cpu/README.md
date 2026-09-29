@@ -7,16 +7,13 @@ timed on every change.
 The entry point is `python/sglang/kernels/ops/attention/fla/kda_cpu.py`, which SGLang's
 `kda_triton.py` calls for prefill on CPU. It starts as a plain PyTorch token loop.
 
-## Setup, once per machine
+## Setup
 
-As the user the runner runs as:
-
-```
-sh benchmark/kernels/linear_attention/kda_cpu/setup_env.sh
-```
-
-It builds `~/.artemis/sglang-cpu-venv` (set `SGLANG_CPU_VENV` to move it), with SGLang's CPU
-dependencies, the CPU `sgl_kernel`, CMake >= 3.26 and pytest. About ten minutes; later runs are a no-op.
+Nothing to run by hand. On first use the Build command runs `setup_env.sh`, which builds
+`~/.artemis/sglang-cpu-venv` (set `SGLANG_CPU_VENV` to move it) with SGLang's CPU dependencies,
+the CPU `sgl_kernel`, CMake >= 3.26 and pytest. That takes a few minutes once; afterwards the
+check costs about a second. The machine needs a C/C++ toolchain, `cmake`, `ninja`, `libnuma-dev`
+and `libtbb-dev`, and network access on that first run; the script names anything missing.
 
 ## Commands
 

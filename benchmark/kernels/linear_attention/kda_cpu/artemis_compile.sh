@@ -5,7 +5,8 @@ VENV="${SGLANG_CPU_VENV:-$HOME/.artemis/sglang-cpu-venv}"
 CACHE="${ARTEMIS_CACHE_ROOT:-$HOME/.artemis/sglang-kda-cpu-cache}"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
 
-test -x "$VENV/bin/python"
+# Builds the environment on first use; a no-op in about a second once it exists.
+sh "$(dirname "${BASH_SOURCE[0]}")/setup_env.sh" "$VENV"
 mkdir -p "$CACHE/src" "$CACHE/build"
 
 # Compare by content, not mtime, and stamp changed files now: ninja rebuilds by mtime, and a

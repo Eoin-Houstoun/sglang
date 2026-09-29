@@ -6,9 +6,9 @@
 #
 #   sh benchmark/kernels/linear_attention/kda_cpu/setup_env.sh [venv-path] [--force]
 #
-# Run this once per machine before the benchmark's three commands. It takes
-# about ten minutes on a 32-core Xeon and is the only step that needs the
-# build toolchain or the network.
+# artemis_compile.sh runs this first, so the Build command sets the machine up on
+# first use (a few minutes) and skips it afterwards. Only that first run needs the
+# network; it can also be run by hand, as the runner's user.
 set -e
 HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "$HERE/../../../.." && pwd)
@@ -37,8 +37,8 @@ export PATH="$HOME/.local/bin:$PATH"
 # Already built: re-running this is a no-op, so it is safe to put in front of
 # anything. Delete the directory (or pass --force) to rebuild after changing
 # pyproject_cpu.toml or the CPU kernel.
-if [ "$FORCE" -eq 0 ] && [ -x "$VENV/bin/python" ] &&
-   "$VENV/bin/python" -c "import torch, sgl_kernel" >/dev/null 2>&1; then
+if [ "$FORCE" -eq 0 ] && [ -x "$VENV/bin/python" ] && [ -x "$VENV/bin/cmake" ] &&
+   "$VENV/bin/python" -c "import torch, sgl_kernel, pytest" >/dev/null 2>&1; then
   echo "[kda_cpu] environment already built at $VENV" >&2
   exit 0
 fi
