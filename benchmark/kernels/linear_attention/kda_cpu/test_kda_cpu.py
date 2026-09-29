@@ -14,6 +14,7 @@ import torch
 sys.path.insert(0, os.path.dirname(__file__))
 from reference import make_inputs, reference_kda  # noqa: E402
 
+import sgl_kernel  # noqa: E402,F401  registers the torch.ops.sgl_kernel CPU ops
 from sglang.kernels.ops.attention.fla.kda_cpu import chunk_kda  # noqa: E402
 
 TOLERANCE = {torch.bfloat16: 3e-2, torch.float16: 1e-2}
