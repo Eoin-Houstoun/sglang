@@ -24,6 +24,8 @@ from sglang.kernels.ops.attention.fla.kda_cpu import chunk_kda  # noqa: E402
 
 WARMUP = int(os.environ.get("KDA_BENCH_WARMUP", "1"))
 ITERS = int(os.environ.get("KDA_BENCH_ITERS", "5"))
+# Independent rounds per point, interleaved across implementations; results report their mean and spread.
+REPEATS = int(os.environ.get("KDA_BENCH_REPEATS", "3"))
 TOLERANCE = 3e-2
 
 # name -> sequence lengths; 32 heads, key/value dim 128, bf16, called the way Kimi Linear
@@ -68,12 +70,23 @@ def benchmark_point(name, lengths, compiled_step):
         raise RuntimeError(f"{name}: entry point differs from the PyTorch fallback by {error}")
 
     # Each call mutates the pool in place, so every call gets a fresh copy; it is tiny next to KDA.
-    kernel_ms = timed(lambda: chunk_kda(**inputs.kwargs(inputs.state.clone())))
-    pytorch_ms = timed(lambda: pytorch_fallback(inputs, inputs.state.clone()))
-    compile_ms = timed(lambda: pytorch_fallback(inputs, inputs.state.clone(), compiled_step))
-    log(f"{name}: kernel {kernel_ms:.1f} ms, pytorch {pytorch_ms:.1f} ms, "
-        f"torch.compile {compile_ms:.1f} ms, max error {error:.2e}")
-    return kernel_ms, pytorch_ms, compile_ms, error
+    implementations = {
+        "kda": lambda: chunk_kda(**inputs.kwargs(inputs.state.clone())),
+        "pytorch": lambda: pytorch_fallback(inputs, inputs.state.clone()),
+        "compile": lambda: pytorch_fallback(inputs, inputs.state.clone(), compiled_step),
+    }
+    rounds = {key: [] for key in implementations}
+    for _ in range(REPEATS):
+        for key, function in implementations.items():
+            rounds[key].append(timed(function))
+    log(f"{name}: " + ", ".join(
+        f"{key} {statistics.mean(ms):.1f} +/- {_spread(ms):.1f} ms" for key, ms in rounds.items()
+    ) + f", max error {error:.2e}")
+    return rounds, error
+
+
+def _spread(samples) -> float:
+    return statistics.stdev(samples) if len(samples) > 1 else 0.0
 
 
 def main():
@@ -88,15 +101,17 @@ def main():
     results = {}
     worst_error = 0.0
     for name, lengths in POINTS.items():
-        kernel_ms, pytorch_ms, compile_ms, error = benchmark_point(name, lengths, compiled_step)
-        results[f"kda_{name}_ms"] = kernel_ms
-        results[f"pytorch_{name}_ms"] = pytorch_ms
-        results[f"compile_{name}_ms"] = compile_ms
-        results[f"speedup_vs_pytorch_{name}"] = pytorch_ms / kernel_ms
-        results[f"speedup_vs_compile_{name}"] = compile_ms / kernel_ms
+        rounds, error = benchmark_point(name, lengths, compiled_step)
+        mean = {key: statistics.mean(ms) for key, ms in rounds.items()}
+        for key, ms in rounds.items():
+            results[f"{key}_{name}_ms"] = mean[key]
+            results[f"{key}_{name}_ms_std"] = _spread(ms)
+        results[f"speedup_vs_pytorch_{name}"] = mean["pytorch"] / mean["kda"]
+        results[f"speedup_vs_compile_{name}"] = mean["compile"] / mean["kda"]
         worst_error = max(worst_error, error)
     results["kda_max_abs_error"] = worst_error
     results["kda_correct"] = 1
+    results["bench_repeats"] = REPEATS
 
     temporary = output_path.with_suffix(".json.tmp")
     temporary.write_text(json.dumps(results, indent=2) + "\n")

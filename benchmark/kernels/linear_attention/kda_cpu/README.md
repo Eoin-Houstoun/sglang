@@ -38,4 +38,6 @@ dependencies, the CPU `sgl_kernel`, CMake >= 3.26 and pytest. About ten minutes;
   The headline metric is `kda_prefill_2k_ms` (lower is better); edit `POINTS` in
   `bench_kda_cpu.py` for other shapes, e.g. fewer heads per rank under tensor parallelism.
 
+Each point is measured in `KDA_BENCH_REPEATS` (default 3) interleaved rounds of warmup plus the median of
+`KDA_BENCH_ITERS` (default 5) calls; results report the mean and, as `*_ms_std`, the spread across rounds.
 `OMP_NUM_THREADS` defaults to 16. Set it to the cores you want measured.
