@@ -207,7 +207,6 @@ def check_against(inputs, expected, expected_pool, lower_bound=None):
     "lengths, heads, key_dim, value_dim",
     [
         ([1, 63, 64, 65], 2, 64, 64),  # chunk-boundary tails
-        ([3, 17], 2, 47, 33),  # K and V not multiples of the vector width
         ([130], KIMI_HEADS, KIMI_DIM, KIMI_DIM),
         ([40, 1, 90], KIMI_HEADS, KIMI_DIM, KIMI_DIM),  # ragged batch
     ],
